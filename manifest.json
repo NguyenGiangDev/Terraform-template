@@ -1,0 +1,36 @@
+{
+    "services": {
+        "api": {
+            "is_public": false,     // false => private subnet (behind ALB), true => public subnet
+            "port": 8080,           // Container port (dùng cho target group và security group rule)
+            "target_group": {       // Có tạo target group không. Naming: {app_name}-{service_name}-{port}-tg
+                "health_check": {
+                    "path": "/up",              // Health check endpoint (default: /up)
+                    "interval": 30,             // Seconds giữa các health check (default: 30)
+                    "timeout": 5,               // Timeout per check (default: 5)
+                    "healthy_threshold": 2,     // Số lần thành công để coi là healthy (default: 2)
+                    "unhealthy_threshold": 3    // Số lần thất bại để coi là unhealthy (default: 3)
+                }
+            },
+            "mapping": [            // ALB listener rules. ALB được xác định qua biến alb_listener_arn (CI/CD inject)
+                {
+                    "priority": 100,    // Priority của ALB rule (phải unique trên cùng listener)
+                    "domain": [
+                        "backend-rewardhub-stg.gotit.vn"
+                    ]
+                }
+            ]
+        }
+        // Thêm service khác: worker, web, etc.
+        // "worker": {
+        //     "is_public": false,
+        //     "port": 8080
+        //     // Không có target_group và mapping => không expose ra ALB
+        // }
+    },
+    "iam_policies": {
+        // Chỉ cần ARN của policy. Tất cả policy này sẽ được attach vào ECS Task Role.
+        "s3": "arn:aws:iam::890970452363:policy/s3_gotit-campaign-cdn-dev_rwdObject",
+        "sqs": "arn:aws:iam::890970452363:policy/sqs_reward-hub_stg"
+    }
+}

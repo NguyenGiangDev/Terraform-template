@@ -1,0 +1,26 @@
+# Git ignore file for terraform-template
+
+# Terraform state files (never commit these)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Variable files with sensitive values (never commit these)
+terraform.tfvars
+*.tfvars
+!examples/*.tfvars.example
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Override files (local developer overrides)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CI/CD generated files
+.terraform.tfplan
+tfplan
