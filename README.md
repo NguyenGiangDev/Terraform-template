@@ -195,4 +195,3 @@ terraform init
 terraform validate
 terraform plan -var-file="examples/terraform.tfvars.example"
 ```
-# Terraform-template
