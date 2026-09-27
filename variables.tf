@@ -10,7 +10,7 @@ variable "environment" {
   description = "Deployment environment label (staging | production). Dùng trong resource naming."
 
   validation {
-    condition     = contains(["staging", "production", "stg", "prod", "dev"], var.environment)
+    condition     = contains(["staging", "production", "stg", "prod", "test"], var.environment)
     error_message = "environment phải là một trong: staging, production, stg, prod, dev."
   }
 }
