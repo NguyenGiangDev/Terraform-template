@@ -75,14 +75,9 @@ jobs:
         run: |
           terraform plan \
             -var="app_name=${{ env.APP_NAME }}" \
-            -var="environment=${{ env.ENV == 'stg' && 'staging' || 'production' }}" \
+            -var="environment=${{ env.ENV }}" \
             -var="env=${{ env.ENV }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="vpc_id=${{ secrets.VPC_ID }}" \
-            -var="private_subnet_ids=${{ secrets.PRIVATE_SUBNET_IDS }}" \
-            -var="public_subnet_ids=${{ secrets.PUBLIC_SUBNET_IDS }}" \
-            -var="ecs_cluster_id=${{ secrets.ECS_CLUSTER_ID }}" \
-            -var="ecs_cluster_name=${{ secrets.ECS_CLUSTER_NAME }}" \
             -out=tfplan-ecr
           terraform apply -auto-approve tfplan-ecr
 

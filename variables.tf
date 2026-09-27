@@ -63,16 +63,19 @@ variable "aws_region" {
 
 variable "vpc_id" {
   type        = string
+  default     = null
   description = "VPC ID nơi các ECS resources sẽ được deploy."
 }
 
 variable "public_subnet_ids" {
   type        = list(string)
+  default     = []
   description = "Danh sách public subnet IDs (dành cho services có is_public=true trong manifest)."
 }
 
 variable "private_subnet_ids" {
   type        = list(string)
+  default     = []
   description = "Danh sách private subnet IDs (dành cho services có is_public=false trong manifest — default)."
 }
 
@@ -80,11 +83,13 @@ variable "private_subnet_ids" {
 
 variable "ecs_cluster_id" {
   type        = string
+  default     = null
   description = "ID của ECS Cluster đã tồn tại để deploy services vào."
 }
 
 variable "ecs_cluster_name" {
   type        = string
+  default     = null
   description = "Tên ECS Cluster (dùng cho CloudWatch log naming)."
 }
 
