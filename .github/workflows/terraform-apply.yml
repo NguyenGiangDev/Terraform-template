@@ -15,7 +15,7 @@ on:
         required: true
         default: "stg"
         type: choice
-        options: [stg, prod]
+        options: [stg, prod, test]
       image_tag:
         description: "Image tag (default: commit SHA)"
         required: false

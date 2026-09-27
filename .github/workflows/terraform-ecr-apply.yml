@@ -12,7 +12,7 @@ on:
         required: true
         default: "stg"
         type: choice
-        options: [stg, prod]
+        options: [stg, prod, test]
 
 env:
   TF_VERSION: "1.9.0"
