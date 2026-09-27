@@ -1,10 +1,8 @@
 locals {
-  # source name
-  svc_id = var.app_name
   # ─── Parse manifest.json ─────────────────────────────────────────────────────
   # manifest.json hỗ trợ JS-style comments (//) để developer có thể thêm ghi chú.
   # Bước này strip tất cả comments trước khi parse JSON.
-  # LƯU Ý: Tránh dùng "//" bên trong string values của JSON (ví dụ: trong URL).
+  # LƯU Ý: Tránh dùng "//" bên trong string values (ví dụ: URL https://... sẽ bị cắt).
   _manifest_raw     = file("${path.root}/manifest.json")
   _manifest_cleaned = replace(local._manifest_raw, "/\\s*\\/\\/[^\\n]*/", "")
   manifest          = jsondecode(local._manifest_cleaned)
@@ -13,41 +11,40 @@ locals {
   services     = try(local.manifest.services, {})
   iam_policies = try(local.manifest.iam_policies, {})
 
-  # Danh sách policy ARNs cần attach vào ECS Task Role
+  # Policy ARNs cần attach vào ECS Task Role
   iam_policy_arns = values(local.iam_policies)
 
-  # ─── ECR repositories ──────────────────────────────────────────────────────
-  create_ecr           = try(jsondecode(file("${path.module}/${var.env}-manifest.json")).create_ecr, true)
-  nginx_ecr_repository = (var.NGINX_REPOSITORY_URL != null && var.NGINX_REPOSITORY_URL != "") ? var.NGINX_REPOSITORY_URL : null
-  app_ecr_repository   = (var.APP_REPOSITORY_URL   != null && var.APP_REPOSITORY_URL   != "") ? var.APP_REPOSITORY_URL   : null
-  repositories = merge(
-    local.nginx_ecr_repository != null ? { nginx = "${var.env}-nginx" } : {},
-    local.app_ecr_repository   != null ? { app   = "${var.env}-app"   } : {}
-  )
+  # ─── ECR ─────────────────────────────────────────────────────────────────────
+  # create_ecr: đọc từ manifest (default true)
+  # Set false trong manifest nếu ECR repos đã tồn tại và không cần recreate.
+  create_ecr = try(local.manifest.create_ecr, true)
 
-  # Image URIs — tính tự động từ ECR repo URL
-  # nginx luôn dùng :latest (image được rebuild mỗi deploy bởi CI/CD)
-  nginx_image = "${var.NGINX_REPOSITORY_URL}:latest"
-  # app dùng tag cụ thể từ CI/CD — đảm bảo traceability & rollback
-  app_image   = "${var.APP_REPOSITORY_URL}:${var.image_tag}"
+  # ECR repo names: {env}-{app_name}-{key}
+  ecr_repos = {
+    app   = "${var.env}-${var.app_name}-app"
+    nginx = "${var.env}-${var.app_name}-nginx"
+  }
 
   # Lifecycle policy: giữ tối đa 30 images gần nhất, expire các image cũ hơn
   repository_lifecycle_policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep last 30 images, expire older ones"
-        selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 30
-        }
-        action = {
-          type = "expire"
-        }
+    rules = [{
+      rulePriority = 1
+      description  = "Keep last 30 images, expire older ones"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 30
       }
-    ]
+      action = { type = "expire" }
+    }]
   })
+
+  # ─── Image URIs ───────────────────────────────────────────────────────────────
+  # nginx luôn dùng :latest (CI/CD rebuild mỗi deploy)
+  # app dùng tag cụ thể từ CI/CD — đảm bảo traceability & rollback
+  nginx_image = var.nginx_repository_url != null ? "${var.nginx_repository_url}:latest" : null
+  app_image   = var.app_repository_url != null ? "${var.app_repository_url}:${var.image_tag}" : null
+
   # ─── Service filters ─────────────────────────────────────────────────────────
 
   # Services có khai báo target_group → sẽ tạo ALB Target Group
@@ -69,21 +66,30 @@ locals {
   service_configs = {
     for name, svc in local.services :
     name => {
+      # Launch type: EC2 (default) hoặc FARGATE
+      # EC2    → dùng CPU/RAM của EC2 instance, không cần khai báo ở task level
+      # FARGATE → AWS quản lý infra, bắt buộc phải khai báo cpu/memory ở task level
+      launch_type = upper(try(svc.launch_type, "EC2"))
+
       # Port: manifest > default variable
       port = try(svc.port, var.default_container_port)
 
-      # CPU/Memory/Count: variable override > manifest value > default variable
+      # CPU/Memory: variable override > manifest value > default variable
+      # Dùng cho container-level definitions (áp dụng cho cả EC2 lẫn FARGATE)
       cpu           = try(var.service_cpu[name], try(svc.cpu, var.default_cpu))
       memory        = try(var.service_memory[name], try(svc.memory, var.default_memory))
       desired_count = try(var.service_desired_count[name], try(svc.desired_count, var.default_desired_count))
 
-      # Subnet selection:
-      #   is_public = false (default) → private subnets (tasks ẩn sau ALB, không có public IP)
-      #   is_public = true            → public subnets (tasks có public IP, dùng cho edge cases)
-      subnet_ids = try(svc.is_public, false) ? var.public_subnet_ids : var.private_subnet_ids
+      # Task-level CPU/Memory (field cpu/memory của aws_ecs_task_definition):
+      #   FARGATE → bắt buộc phải có, lấy từ variable override > manifest > default
+      #   EC2     → null (AWS tự tính từ tổng container cpu/memory trên instance)
+      task_cpu    = upper(try(svc.launch_type, "EC2")) == "FARGATE" ? try(var.service_cpu[name], try(svc.cpu, var.default_cpu)) : null
+      task_memory = upper(try(svc.launch_type, "EC2")) == "FARGATE" ? try(var.service_memory[name], try(svc.memory, var.default_memory)) : null
 
-      # App image URI — tính tự động từ APP_REPOSITORY_URL + image_tag
-      image = local.app_image
+      # Subnet selection:
+      #   is_public = false (default) → private subnets (tasks ẩn sau ALB)
+      #   is_public = true            → public subnets (tasks có public IP)
+      subnet_ids = try(svc.is_public, false) ? var.public_subnet_ids : var.private_subnet_ids
 
       # Feature flags
       has_tg      = try(svc.target_group, null) != null
@@ -99,20 +105,19 @@ locals {
   }
 
   # ─── Target Group names ───────────────────────────────────────────────────────
-  # Naming convention: {app_name}-{service_name}-{port}-tg
+  # Naming: {app_name}-{service_name}-{port}-tg
   # AWS limit: tên TG tối đa 32 ký tự → tự động truncate nếu quá dài
   tg_names = {
     for name, svc in local.services_with_tg :
     name => substr(
       "${var.app_name}-${name}-${try(svc.port, var.default_container_port)}-tg",
-      0,
-      32
+      0, 32
     )
   }
 
   # ─── ALB Listener Rules (flatten từ mapping arrays) ──────────────────────────
   # Mỗi service có thể có nhiều mapping rules (mảng).
-  # Ta flatten tất cả thành 1 map phẳng với key duy nhất: "{svc_name}-rule-{idx}"
+  # Flatten thành 1 map phẳng với key duy nhất: "{svc_name}-rule-{idx}"
 
   # Sort service keys để đảm bảo thứ tự ổn định khi tính priority tự động
   _mapping_service_keys_sorted = sort(keys(local.services_with_mapping))
@@ -120,7 +125,6 @@ locals {
   alb_rules = merge([
     for svc_name, svc in local.services_with_mapping : {
       for idx, rule in svc.mapping :
-      # Key duy nhất cho mỗi rule
       "${svc_name}-rule-${idx}" => {
         service_name = svc_name
         domains      = rule.domain

@@ -1,80 +1,71 @@
-# ─── ECS Services ─────────────────────────────────────────────────────────────
-# Tạo ECS Task Definition + ECS Service + Security Group + CloudWatch Log Group
-# cho mỗi service được khai báo trong manifest.json → services
+# ─── IAM: Task Execution Role ─────────────────────────────────────────────────
+# ECS Agent dùng role này để:
+#   - Pull image từ ECR
+#   - Ghi logs lên CloudWatch
+#   - Đọc secrets từ SSM Parameter Store / Secrets Manager
 
-module "ecs_service" {
-  for_each = local.service_configs
-  source   = "./modules/ecs-service"
+resource "aws_iam_role" "task_execution" {
+  name = "${var.app_name}-${var.environment}-ecs-execution-role"
 
-  app_name     = var.app_name
-  service_name = each.key
-  environment  = var.environment
-  aws_region   = var.aws_region
-
-  cluster_id   = var.ecs_cluster_id
-  cluster_name = var.ecs_cluster_name
-
-  image         = each.value.image
-  nginx_image   = local.nginx_image
-  port          = each.value.port
-  cpu           = each.value.cpu
-  memory        = each.value.memory
-  desired_count = each.value.desired_count
-  subnet_ids    = each.value.subnet_ids
-
-  execution_role_arn = aws_iam_role.task_execution.arn
-  task_role_arn      = aws_iam_role.task.arn
-
-  # Attach target group nếu service có khai báo target_group trong manifest
-  target_group_arn = each.value.has_tg ? module.target_group[each.key].target_group_arn : null
-
-  vpc_id                = var.vpc_id
-  alb_security_group_id = var.alb_security_group_id
-
-  tags = var.tags
-
-  depends_on = [
-    aws_iam_role_policy_attachment.task_execution_managed,
-    aws_iam_role_policy_attachment.task_additional,
-  ]
-}
-
-# ─── ALB Target Groups ────────────────────────────────────────────────────────
-# Tạo Target Group cho mỗi service có khai báo target_group trong manifest.
-# Naming: {app_name}-{service_name}-{port}-tg (max 32 chars, tự truncate)
-
-module "target_group" {
-  for_each = local.services_with_tg
-  source   = "./modules/target-group"
-
-  name   = local.tg_names[each.key]
-  port   = local.service_configs[each.key].port
-  vpc_id = var.vpc_id
-
-  health_check_path       = local.service_configs[each.key].health_check_path
-  health_check_interval   = local.service_configs[each.key].health_check_interval
-  health_check_timeout    = local.service_configs[each.key].health_check_timeout
-  health_check_healthy    = local.service_configs[each.key].health_check_healthy
-  health_check_unhealthy  = local.service_configs[each.key].health_check_unhealthy
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "ECSTasksAssumeRole"
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
 
   tags = merge(var.tags, {
-    Service = each.key
+    Name = "${var.app_name}-${var.environment}-ecs-execution-role"
   })
 }
 
-# ─── ALB Listener Rules ────────────────────────────────────────────────────────
-# Tạo ALB host-header routing rules từ manifest.json → services[*].mapping[*].domain
-# Mỗi rule forward traffic từ domain đến target group tương ứng.
-# ALB listener được xác định qua biến alb_listener_arn (inject từ CI/CD theo environment).
+resource "aws_iam_role_policy_attachment" "task_execution_managed" {
+  role       = aws_iam_role.task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
 
-module "alb_rule" {
-  for_each = local.alb_rules
-  source   = "./modules/alb-rule"
+# ─── IAM: Task Role ───────────────────────────────────────────────────────────
+# Container dùng role này để gọi AWS APIs (S3, SQS, DynamoDB...).
+# Các policy ARN được khai báo trong manifest.json → iam_policies section.
 
-  listener_arn     = var.alb_listener_arn
-  priority         = each.value.priority
-  domains          = each.value.domains
-  target_group_arn = module.target_group[each.value.service_name].target_group_arn
+resource "aws_iam_role" "task" {
+  name = "${var.app_name}-${var.environment}-ecs-task-role"
 
-  depends_on = [module.target_group]
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "ECSTasksAssumeRole"
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = merge(var.tags, {
+    Name = "${var.app_name}-${var.environment}-ecs-task-role"
+  })
+}
+
+# Attach custom policies từ manifest.json → iam_policies
+# Key của map (s3, sqs, ...) chỉ dùng cho Terraform resource naming.
+resource "aws_iam_role_policy_attachment" "task_additional" {
+  for_each = local.iam_policies
+
+  role       = aws_iam_role.task.name
+  policy_arn = each.value
+}
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+
+output "task_execution_role_arn" {
+  description = "ARN của ECS Task Execution IAM Role"
+  value       = aws_iam_role.task_execution.arn
+}
+
+output "task_role_arn" {
+  description = "ARN của ECS Task IAM Role (container permissions)"
+  value       = aws_iam_role.task.arn
 }

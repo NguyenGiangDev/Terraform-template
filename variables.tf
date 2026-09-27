@@ -7,31 +7,50 @@ variable "app_name" {
 
 variable "environment" {
   type        = string
-  description = "Deployment environment (dev | stg | prod)."
+  description = "Deployment environment label (staging | production). Dùng trong resource naming."
+
+  validation {
+    condition     = contains(["staging", "production", "stg", "prod", "dev"], var.environment)
+    error_message = "environment phải là một trong: staging, production, stg, prod, dev."
+  }
 }
 
 variable "env" {
   type        = string
-  description = "Short environment alias (dev|stg|prod). Dùng làm prefix cho ECR repository name và đọc file {env}-manifest.json."
+  description = "Short environment alias (stg | prod | dev). Dùng làm prefix cho ECR repository names."
+
+  validation {
+    condition     = contains(["stg", "prod", "dev"], var.env)
+    error_message = "env phải là một trong: stg, prod, dev."
+  }
 }
 
-# ─── ECR ──────────────────────────────────────────────────────────────────────
+# ─── Container Images ─────────────────────────────────────────────────────────
 
-variable "NGINX_REPOSITORY_URL" {
+variable "app_repository_url" {
   type        = string
   default     = null
-  description = "URL của ECR repository dành cho nginx image. Nếu null → bỏ qua, không tạo nginx ECR repo."
+  description = <<-EOT
+    URL ECR repository cho app image. CI/CD inject sau bước tạo ECR (ecr.tf).
+    Ví dụ: 890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/stg-reward-hub-app
+    Null khi chỉ chạy bước tạo ECR.
+  EOT
 }
 
-variable "APP_REPOSITORY_URL" {
+variable "nginx_repository_url" {
   type        = string
   default     = null
-  description = "URL của ECR repository dành cho app image. Nếu null → bỏ qua, không tạo app ECR repo."
+  description = <<-EOT
+    URL ECR repository cho nginx image. CI/CD inject sau bước tạo ECR (ecr.tf).
+    Ví dụ: 890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/stg-reward-hub-nginx
+    Null khi chỉ chạy bước tạo ECR.
+  EOT
 }
 
 variable "image_tag" {
   type        = string
-  description = "Docker image tag cho app container. CI/CD cung cấp per deploy. Ví dụ: abc1234, v1.2.3."
+  default     = null
+  description = "Docker image tag cho app container. CI/CD inject per deploy. Ví dụ: abc1234 (commit SHA)."
 }
 
 # ─── Network ──────────────────────────────────────────────────────────────────
@@ -54,7 +73,7 @@ variable "public_subnet_ids" {
 
 variable "private_subnet_ids" {
   type        = list(string)
-  description = "Danh sách private subnet IDs (dành cho services có is_public=false trong manifest - default)."
+  description = "Danh sách private subnet IDs (dành cho services có is_public=false trong manifest — default)."
 }
 
 # ─── ECS ──────────────────────────────────────────────────────────────────────
@@ -73,14 +92,17 @@ variable "ecs_cluster_name" {
 
 variable "alb_listener_arn" {
   type        = string
+  default     = null
   description = <<-EOT
     ARN của ALB HTTPS Listener để gắn routing rules vào.
-    Được CI/CD inject tùy theo environment (stg dùng ALB staging, prod dùng ALB production).
+    CI/CD inject tùy theo environment (stg dùng ALB staging, prod dùng ALB production).
+    Null khi không deploy ALB rules (bước ECR only hoặc không có service public).
   EOT
 }
 
 variable "alb_security_group_id" {
   type        = string
+  default     = null
   description = "Security Group ID của ALB. Dùng để cho phép traffic từ ALB vào ECS tasks."
 }
 
@@ -123,19 +145,19 @@ variable "default_desired_count" {
 variable "service_cpu" {
   type        = map(number)
   default     = {}
-  description = "Override CPU per service. Map của service_name => cpu_units."
+  description = "Override CPU per service. Map của service_name => cpu_units. Ví dụ: { api = 512 }"
 }
 
 variable "service_memory" {
   type        = map(number)
   default     = {}
-  description = "Override memory per service. Map của service_name => memory_mb."
+  description = "Override memory per service. Map của service_name => memory_mb. Ví dụ: { api = 1024 }"
 }
 
 variable "service_desired_count" {
   type        = map(number)
   default     = {}
-  description = "Override desired count per service. Map của service_name => count."
+  description = "Override desired count per service. Map của service_name => count. Ví dụ: { api = 2 }"
 }
 
 # ─── Tags ─────────────────────────────────────────────────────────────────────

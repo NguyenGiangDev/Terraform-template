@@ -1,6 +1,9 @@
 {
+    "create_ecr": true,        // true (default) = tạo ECR repos. false = ECR đã tồn tại, bỏ qua
+
     "services": {
         "api": {
+            "launch_type": "EC2",   // "EC2" (default) hoặc "FARGATE". EC2: không điền cpu/memory task level; FARGATE: bắt buộc
             "is_public": false,     // false => private subnet (behind ALB), true => public subnet
             "port": 8080,           // Container port (dùng cho target group và security group rule)
             "target_group": {       // Có tạo target group không. Naming: {app_name}-{service_name}-{port}-tg
@@ -21,10 +24,13 @@
                 }
             ]
         }
-        // Thêm service khác: worker, web, etc.
+        // Ví dụ worker service dùng FARGATE (cpu/memory được điền vào task level):
         // "worker": {
+        //     "launch_type": "FARGATE",
         //     "is_public": false,
-        //     "port": 8080
+        //     "port": 8080,
+        //     "cpu": 512,
+        //     "memory": 1024
         //     // Không có target_group và mapping => không expose ra ALB
         // }
     },

@@ -1,28 +1,27 @@
-# ─── terraform.tfvars.example ────────────────────────────────────────────────
+# ─── terraform.tfvars.example ─────────────────────────────────────────────────
 # Copy file này thành terraform.tfvars và điền các giá trị thực tế.
-# KHÔNG commit terraform.tfvars vào git (thêm vào .gitignore).
-# Thường CI/CD sẽ generate file này khi deploy.
+# KHÔNG commit terraform.tfvars vào git (đã có trong .gitignore).
+# Thường CI/CD sẽ generate file này tự động khi deploy.
 
 # ─── Application ──────────────────────────────────────────────────────────────
 
 app_name    = "reward-hub"
 environment = "stg"
+env         = "stg"
 aws_region  = "ap-southeast-1"
 
 # ─── Network ──────────────────────────────────────────────────────────────────
 
 vpc_id = "vpc-0123456789abcdef0"
 
-# Private subnets (dùng cho services có is_public=false trong manifest)
 private_subnet_ids = [
   "subnet-0aaaaaaaaaaaaaaaa",
-  "subnet-0bbbbbbbbbbbbbbb",
+  "subnet-0bbbbbbbbbbbbbbbbb",
 ]
 
-# Public subnets (dùng cho services có is_public=true trong manifest)
 public_subnet_ids = [
-  "subnet-0ccccccccccccccc",
-  "subnet-0ddddddddddddddd",
+  "subnet-0ccccccccccccccccc",
+  "subnet-0ddddddddddddddddd",
 ]
 
 # ─── ECS ──────────────────────────────────────────────────────────────────────
@@ -35,18 +34,17 @@ ecs_cluster_name = "gotit-stg"
 # ALB Listener ARN — stg dùng ALB staging, prod dùng ALB production
 alb_listener_arn = "arn:aws:elasticloadbalancing:ap-southeast-1:890970452363:listener/app/gotit-stg-alb/abc123/def456"
 
-# Security Group ID của ALB (để ECS task SG cho phép traffic vào)
+# Security Group ID của ALB (để ECS task SG cho phép traffic vào từ ALB)
 alb_security_group_id = "sg-0123456789abcdef0"
 
-# ─── Container Images ──────────────────────────────────────────────────────────
-# CI/CD cung cấp image URI với tag cụ thể (commit SHA hoặc version)
-# Map của service_name (key trong manifest.json) => full image URI
+# ─── Container Images ─────────────────────────────────────────────────────────
+# CI/CD inject sau bước tạo ECR (đọc từ terraform output ecr_repository_urls).
 
-service_images = {
-  api = "890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/reward-hub/api:abc1234f"
-  # Thêm các service khác nếu có trong manifest:
-  # worker = "890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/reward-hub/worker:abc1234f"
-}
+app_repository_url   = "890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/stg-reward-hub-app"
+nginx_repository_url = "890970452363.dkr.ecr.ap-southeast-1.amazonaws.com/stg-reward-hub-nginx"
+
+# Docker image tag — CI/CD inject per deploy (commit SHA hoặc version tag)
+image_tag = "abc1234f"
 
 # ─── Resource Sizing (Optional overrides) ─────────────────────────────────────
 # Uncomment để override default values (256 CPU, 512 MB, 1 instance)
