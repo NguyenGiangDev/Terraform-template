@@ -11,7 +11,7 @@ variable "environment" {
 
   validation {
     condition     = contains(["staging", "production", "stg", "prod", "test"], var.environment)
-    error_message = "environment phải là một trong: staging, production, stg, prod, dev."
+    error_message = "environment phải là một trong: staging, production, stg, prod, dev, test."
   }
 }
 
@@ -20,8 +20,8 @@ variable "env" {
   description = "Short environment alias (stg | prod | dev). Dùng làm prefix cho ECR repository names."
 
   validation {
-    condition     = contains(["stg", "prod", "dev"], var.env)
-    error_message = "env phải là một trong: stg, prod, dev."
+    condition     = contains(["stg", "prod", "dev", "test"], var.env)
+    error_message = "env phải là một trong: stg, prod, dev, test."
   }
 }
 
