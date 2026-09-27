@@ -11,10 +11,10 @@ Template deploy ECS workload lên AWS, thiết kế để tích hợp vào GitHu
 | File | Resources |
 |---|---|
 | `templates/ecr.tf` | ECR repositories (app + nginx) |
+| `templates/iam.tf` | IAM Task Execution Role, IAM Task Role |
 | `templates/service.tf` | CloudWatch Log Group, Security Group, ECS Task Definition, ECS Service |
 | `templates/target-group.tf` | ALB Target Group |
 | `templates/alb-rule.tf` | ALB Listener Rule (host-header routing) |
-| `main.tf` (core) | IAM Task Execution Role, IAM Task Role |
 
 ---
 
@@ -23,12 +23,12 @@ Template deploy ECS workload lên AWS, thiết kế để tích hợp vào GitHu
 ```
 Terraform-template/
 ├── templates/                  # CI/CD copy vào working dir khi cần
+│   ├── iam.tf                  # IAM roles (Execution Role + Task Role)
 │   ├── ecr.tf                  # ECR repos
 │   ├── service.tf              # ECS Task + Service + SG + CloudWatch
 │   ├── target-group.tf         # ALB Target Group
 │   └── alb-rule.tf             # ALB Listener Rule
 │
-├── main.tf                     # Core: IAM roles (luôn deploy)
 ├── locals.tf                   # Core: giá trị tính toán từ manifest + variables
 ├── variables.tf                # Core: input variables
 ├── backend.tf                  # Core: S3 remote state (partial config)
@@ -46,8 +46,9 @@ Terraform-template/
 ### Bước 1 — Tạo ECR repositories (lần đầu deploy)
 
 ```bash
-# Working dir chứa: core files + ecr.tf
-cp templates/ecr.tf ./terraform/
+# Working dir chứa: core files + ecr.tf + iam.tf
+cp backend.tf locals.tf variables.tf providers.tf manifest.json ./terraform/
+cp templates/ecr.tf templates/iam.tf ./terraform/
 
 terraform -chdir=terraform init \
   -backend-config="bucket=gotit-terraform-state" \

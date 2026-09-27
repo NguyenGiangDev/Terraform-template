@@ -55,13 +55,14 @@ jobs:
           terraform_wrapper: false
 
       # ── Copy đúng các file cần thiết vào thư mục làm việc ──────────────────
-      # Core files: backend.tf, locals.tf, main.tf, variables.tf, providers.tf
-      # ECR file:   templates/ecr.tf (copy vào cùng cấp với core files)
-      # → Terraform chỉ "thấy" ECR resources, không thấy ECS/service/alb-rule
+      # Core files: backend.tf, locals.tf, variables.tf, providers.tf
+      # Template files: ecr.tf (ECR repos)
+      # → State ECR riêng biệt (key: ENV/APP/...) — không chứa IAM, không cần iam.tf
+      # → Terraform chỉ "thấy" ECR resources, không thấy ECS/IAM/service/alb-rule
       - name: Prepare Terraform workspace
         run: |
           mkdir -p $TF_DIR
-          cp backend.tf locals.tf main.tf variables.tf providers.tf manifest.json $TF_DIR/
+          cp backend.tf locals.tf variables.tf providers.tf manifest.json $TF_DIR/
           cp templates/ecr.tf $TF_DIR/
 
       # Terraform init: bucket/region/encrypt đã có trong backend.tf

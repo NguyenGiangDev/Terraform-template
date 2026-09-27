@@ -53,13 +53,15 @@ jobs:
           terraform_wrapper: false
 
       # ── Copy đúng các file cần thiết vào thư mục làm việc ──────────────────
-      # Core files: backend.tf, locals.tf, main.tf, variables.tf, providers.tf
+      # Core files: backend.tf, locals.tf, variables.tf, providers.tf
       # Template files: TẤT CẢ file trong templates/ NGOẠI TRỪ ecr.tf
+      #   - iam.tf   → IAM Execution Role + Task Role
+      #   - service.tf, target-group.tf, alb-rule.tf → ECS resources
       #   (ecr.tf không copy vì ECR đã tồn tại — tránh Terraform quản lý lại)
       - name: Prepare Terraform workspace
         run: |
           mkdir -p $TF_DIR
-          cp backend.tf locals.tf main.tf variables.tf providers.tf manifest.json $TF_DIR/
+          cp backend.tf locals.tf variables.tf providers.tf manifest.json $TF_DIR/
           for f in templates/*.tf; do
             [ "$(basename $f)" != "ecr.tf" ] && cp $f $TF_DIR/
           done
