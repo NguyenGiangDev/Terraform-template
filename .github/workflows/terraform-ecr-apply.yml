@@ -89,24 +89,3 @@ jobs:
           ECR_URLS=$(terraform output -json ecr_repository_urls)
           echo "app_repo_url=$(echo $ECR_URLS | jq -r '.app')"     >> $GITHUB_OUTPUT
           echo "nginx_repo_url=$(echo $ECR_URLS | jq -r '.nginx')" >> $GITHUB_OUTPUT
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build & Push app image
-        env:
-          APP_REPO: ${{ steps.ecr-urls.outputs.app_repo_url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f Dockerfile -t $APP_REPO:$IMAGE_TAG -t $APP_REPO:latest .
-          docker push $APP_REPO:$IMAGE_TAG
-          docker push $APP_REPO:latest
-
-      - name: Build & Push nginx image
-        env:
-          NGINX_REPO: ${{ steps.ecr-urls.outputs.nginx_repo_url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f nginx/Dockerfile -t $NGINX_REPO:$IMAGE_TAG -t $NGINX_REPO:latest .
-          docker push $NGINX_REPO:$IMAGE_TAG
-          docker push $NGINX_REPO:latest
